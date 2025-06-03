@@ -1,0 +1,98 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "AirSense Platform Monitoring",
+    "description": "Comprehensive monitoring dashboard for AirSense Intelligence Platform",
+    "tags": ["airsense", "monitoring", "data-engineering"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "API Request Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{job=\"airsense-api\"}[5m])",
+            "legendFormat": "Requests/sec"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 100},
+                {"color": "red", "value": 500}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "API Response Time",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"airsense-api\"}[5m]))",
+            "legendFormat": "95th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"airsense-api\"}[5m]))",
+            "legendFormat": "50th percentile"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Data Pipeline Status",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "airflow_dag_run_duration_seconds",
+            "format": "table"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "ML Model Performance",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "ml_model_mae",
+            "legendFormat": "Mean Absolute Error"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Database Connections",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "postgres_stat_database_numbackends",
+            "legendFormat": "Active connections"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Cache Hit Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_total) * 100",
+            "legendFormat": "Cache Hit Rate %"
+          }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  }
+}

@@ -1,0 +1,155 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: airsense
+      POSTGRES_USER: airsense
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airsense"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  airflow-postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+    volumes:
+      - airflow_postgres_data:/var/lib/postgresql/data
+
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.airflow
+    depends_on:
+      - airflow-postgres
+      - redis
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@airflow-postgres/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+    volumes:
+      - ./data-pipeline/airflow/dags:/opt/airflow/dags
+      - ./data-pipeline/airflow/logs:/opt/airflow/logs
+      - ./data-pipeline/airflow/plugins:/opt/airflow/plugins
+    ports:
+      - "8080:8080"
+    command: webserver
+
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.airflow
+    depends_on:
+      - airflow-postgres
+      - redis
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@airflow-postgres/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+    volumes:
+      - ./data-pipeline/airflow/dags:/opt/airflow/dags
+      - ./data-pipeline/airflow/logs:/opt/airflow/logs
+      - ./data-pipeline/airflow/plugins:/opt/airflow/plugins
+    command: scheduler
+
+  api:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.api
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://airsense:secure_password@postgres:5432/airsense
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../infrastructure/docker/Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    environment:
+      REACT_APP_API_URL: http://localhost:8000/api/v1
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+  grafana:
+    image: grafana/grafana:10.1.0
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+
+volumes:
+  postgres_data:
+  redis_data:
+  airflow_postgres_data:
+  grafana_data:
+  prometheus_data:
+
+networks:
+  default:
+    driver: bridge

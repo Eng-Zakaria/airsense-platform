@@ -1,0 +1,90 @@
+# infrastructure/kubernetes/base/api-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airsense-api
+  labels:
+    app: airsense-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: airsense-api
+  template:
+    metadata:
+      labels:
+        app: airsense-api
+    spec:
+      containers:
+      - name: api
+        image: airsense/api:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: airsense-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: airsense-config
+              key: redis-url
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: airsense-api-service
+spec:
+  selector:
+    app: airsense-api
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: airsense-api-ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+spec:
+  tls:
+  - hosts:
+    - api.airsense.app
+    secretName: airsense-api-tls
+  rules:
+  - host: api.airsense.app
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: airsense-api-service
+            port:
+              number: 80

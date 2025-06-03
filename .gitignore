@@ -1,6 +1,6 @@
-
-
-.venv
+venv
+.venv/
 .data/external/
 .data/processed/
 .data/raw/
+.env
