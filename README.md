@@ -176,15 +176,6 @@ kubectl apply -f infrastructure/kubernetes/
    - OpenStreetMap for urban infrastructure
    - City Traffic APIs
 
-## 📈 Performance Metrics
-
-| Metric                  | Value               |
-|-------------------------|---------------------|
-| API Response Time (p95) | 186ms               |
-| Data Processing Rate    | 15,000 msg/sec      |
-| Prediction Accuracy     | 92% (6-hour forecast)|
-| System Uptime           | 99.95% (last 90d)   |
-| Data Retention          | 36 months raw data  |
 
 ## 🤝 Contributing
 
@@ -200,7 +191,7 @@ Distributed under the MIT License.
 
 ## ✉️ Contact
 
-Project Maintainer - [Your Name](mailto:mohamedzakaria.cs@gmail.com)
+Project Maintainer - [Mohammed Zakaria](mailto:mohamedzakaria.cs@gmail.com)
 
 Project Link: [https://github.com/Eng-Zakaria/airsense-platform](github.com/Eng-Zakaria/airsense-platform)
 
